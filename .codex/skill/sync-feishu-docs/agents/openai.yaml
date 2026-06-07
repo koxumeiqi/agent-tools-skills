@@ -1,0 +1,4 @@
+interface:
+  display_name: "Feishu CLI Sync"
+  short_description: "Sync Markdown and articles to Feishu Docs, Drive, or Wiki with lark-cli."
+  default_prompt: "Use $sync-feishu-docs to sync this Markdown document to Feishu and use the article title, not the filename, as the remote title."
