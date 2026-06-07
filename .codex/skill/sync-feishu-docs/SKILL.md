@@ -152,13 +152,41 @@ The script is responsible for:
 
 Feishu document sync should not be assumed to render raw Mermaid automatically.
 
-Default behavior:
+Default behavior for ordinary sync:
 
 - Keep the original Mermaid body in a fenced code block so the logic is preserved.
 - Insert a short plain-language summary directly before it.
-- If the user explicitly wants a polished Feishu-native visual result, explain that Mermaid may require a later render-to-image or manual in-doc conversion step.
+- Do not silently drop Mermaid content.
 
-Do not silently drop Mermaid content.
+When the user asks for polished diagrams, visual flowcharts, "按飞书规范转成图", or any equivalent request:
+
+1. Create or update the Feishu Doc with normal text content first.
+2. Insert a blank native whiteboard block at each diagram position:
+   ```powershell
+   lark-cli docs +update --api-version v2 --as user --doc '<doc_url>' `
+     --command append `
+     --content '<h3>流程图标题</h3><whiteboard type="blank"></whiteboard>'
+   ```
+3. Read `data.document.new_blocks[]` and extract each whiteboard `block_token`.
+4. Write the Mermaid source into the whiteboard as a Feishu-native diagram:
+   ```powershell
+   lark-cli whiteboard +update `
+     --whiteboard-token '<block_token>' `
+     --input_format mermaid `
+     --source '@diagram.mmd' `
+     --overwrite `
+     --as user `
+     --idempotent-token '<10+ chars unique token>'
+   ```
+5. Verify with `docs +fetch --api-version v2` that the document contains `<whiteboard token="...">` blocks and expected Chinese text.
+6. Optionally verify the whiteboard content with:
+   ```powershell
+   lark-cli whiteboard +query --whiteboard-token '<block_token>' --output_as code --as user
+   ```
+
+Important Windows note: when creating XML content through PowerShell, non-ASCII text can be corrupted into `????` if the command path is not UTF-8 safe. Prefer the Python subprocess stdin pattern for Chinese content, or create the main body from Markdown first and then append whiteboard blocks.
+
+For complex flowcharts, consider using the `lark-whiteboard` skill and its DSL route instead of Mermaid. Simple flowcharts, sequence diagrams, class diagrams, mind maps, and similar Mermaid-compatible diagrams can be written directly with `whiteboard +update --input_format mermaid`.
 
 ### Callouts and rich blocks
 
@@ -232,13 +260,14 @@ The remote content must satisfy all of these checks:
 - Expected Chinese phrases from the source are present.
 - No obvious mojibake markers appear, especially `????`, `æ`, `å`, or `Ñ` sequences in Chinese text.
 - Markdown table separator rows are not present as data cells such as `<p>---</p>`.
-- Mermaid content is preserved in readable fenced-code form or another explicitly chosen fallback.
+- Mermaid content is preserved in readable fenced-code form, or diagrams requested as polished visuals are present as native `<whiteboard token="...">` blocks.
 
 If any check fails, fix the local preprocessing or upload method and sync again. Common fixes:
 
 - For `????` output, re-upload using explicit UTF-8 PowerShell output settings before piping to `--content -`.
 - For `Untitled`, keep the H1 in the Markdown body and pass `--title`; then verify whether `<title>` was set in `docs +fetch`.
 - For table rows containing `---`, fix preprocessing so legal Markdown separator rows are not duplicated as table body rows.
+- For native diagram sync, if the main document body contains `????` after XML upload, recreate or update the body using UTF-8-safe stdin and keep the existing whiteboard strategy; do not report success with corrupted Chinese text.
 
 ### Playwright visual review
 
