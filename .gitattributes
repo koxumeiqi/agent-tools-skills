@@ -1,0 +1,6 @@
+*.sh text eol=lf
+*.py text eol=lf
+.claude/**/*.conf text eol=lf
+.claude/**/*.json text eol=lf
+.claude/**/*.md text eol=lf
+.claude/**/*.ps1 text eol=crlf
