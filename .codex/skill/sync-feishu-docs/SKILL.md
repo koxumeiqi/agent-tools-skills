@@ -161,14 +161,15 @@ Default behavior for ordinary sync:
 When the user asks for polished diagrams, visual flowcharts, "按飞书规范转成图", or any equivalent request:
 
 1. Create or update the Feishu Doc with normal text content first.
-2. Insert a blank native whiteboard block at each diagram position:
+2. Prefer creating blank native whiteboard blocks at the original diagram positions. If the document was already created from Markdown and the Mermaid code blocks are visible, append temporary whiteboard blocks, then move them to the original section positions with `block_move_after`.
+3. Insert a blank native whiteboard block:
    ```powershell
    lark-cli docs +update --api-version v2 --as user --doc '<doc_url>' `
      --command append `
      --content '<h3>流程图标题</h3><whiteboard type="blank"></whiteboard>'
    ```
-3. Read `data.document.new_blocks[]` and extract each whiteboard `block_token`.
-4. Write the Mermaid source into the whiteboard as a Feishu-native diagram:
+4. Read `data.document.new_blocks[]` and extract each whiteboard `block_token`.
+5. Write the Mermaid source into the whiteboard as a Feishu-native diagram:
    ```powershell
    lark-cli whiteboard +update `
      --whiteboard-token '<block_token>' `
@@ -178,11 +179,28 @@ When the user asks for polished diagrams, visual flowcharts, "按飞书规范转
      --as user `
      --idempotent-token '<10+ chars unique token>'
    ```
-5. Verify with `docs +fetch --api-version v2` that the document contains `<whiteboard token="...">` blocks and expected Chinese text.
-6. Optionally verify the whiteboard content with:
+6. If the whiteboard was appended at the end, fetch with `--detail with-ids`, then move it directly after the intended heading or anchor block:
+   ```powershell
+   lark-cli docs +fetch --api-version v2 --as user --doc '<doc_url>' --detail with-ids
+
+   lark-cli docs +update --api-version v2 --as user --doc '<doc_url>' `
+     --command block_move_after `
+     --block-id '<target_heading_block_id>' `
+     --src-block-ids '<whiteboard_block_id>'
+   ```
+7. Delete old Mermaid fallback blocks and temporary headings after the native whiteboard is in place. Do not leave the user-facing document showing `Flowchart note` text or raw `flowchart TD/LR` code when they requested diagrams:
+   ```powershell
+   lark-cli docs +update --api-version v2 --as user --doc '<doc_url>' `
+     --command block_delete `
+     --block-id '<old_note_block_id>,<old_code_block_id>,<temporary_heading_id>'
+   ```
+8. Verify with `docs +fetch --api-version v2 --detail with-ids` that the document contains `<whiteboard token="...">` blocks at the intended sections and expected Chinese text.
+9. Optionally verify the whiteboard content with:
    ```powershell
    lark-cli whiteboard +query --whiteboard-token '<block_token>' --output_as code --as user
    ```
+
+Final placement requirement: the native whiteboard must appear where the diagram is discussed, not only appended at the document end. If old Mermaid code blocks remain above the whiteboard, the sync is not complete.
 
 Important Windows note: when creating XML content through PowerShell, non-ASCII text can be corrupted into `????` if the command path is not UTF-8 safe. Prefer the Python subprocess stdin pattern for Chinese content, or create the main body from Markdown first and then append whiteboard blocks.
 
@@ -261,6 +279,7 @@ The remote content must satisfy all of these checks:
 - No obvious mojibake markers appear, especially `????`, `æ`, `å`, or `Ñ` sequences in Chinese text.
 - Markdown table separator rows are not present as data cells such as `<p>---</p>`.
 - Mermaid content is preserved in readable fenced-code form, or diagrams requested as polished visuals are present as native `<whiteboard token="...">` blocks.
+- For polished visual diagram requests, raw `Flowchart note` text or visible Mermaid code blocks must not remain in the main diagram sections unless the user explicitly asked to keep source code there.
 
 If any check fails, fix the local preprocessing or upload method and sync again. Common fixes:
 
