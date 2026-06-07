@@ -1,0 +1,18 @@
+{
+  "name": "codex-skill-sync",
+  "version": "0.1.0",
+  "description": "Codex Skill Sync plugin",
+  "author": {
+    "name": "Local developer"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Codex Skill Sync",
+    "shortDescription": "Use Codex Skill Sync in Codex.",
+    "longDescription": "Codex Skill Sync adds a local Codex plugin scaffold.",
+    "developerName": "Local developer",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Help me use Codex Skill Sync."
+  }
+}
