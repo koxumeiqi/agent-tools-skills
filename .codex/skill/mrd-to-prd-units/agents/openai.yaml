@@ -1,0 +1,4 @@
+interface:
+  display_name: "MRD 拆分 PRD 单元"
+  short_description: "基于 Graphiti MCP 将大型 MRD 拆分为保持全局意图和依赖关系的多个 PRD 单元。"
+  default_prompt: "使用 $mrd-to-prd-units 将指定 MRD 文件拆分为多个关联 PRD 单元。"
