@@ -1,8 +1,10 @@
 $ErrorActionPreference = "Stop"
 
 $skillsRoot = "C:\Users\myz03\.codex\skills"
+$pluginsRoot = "C:\Users\myz03\plugins"
 $repoRoot = "C:\Users\myz03\Documents\Codex\2026-06-07\github-cli\agent-tools-skills"
 $repoSkillRoot = Join-Path $repoRoot ".codex\skill"
+$repoPluginRoot = Join-Path $repoRoot ".codex\plugin"
 $logPath = "C:\Users\myz03\.codex\tmp\codex-skill-sync.log"
 
 function Write-Log {
@@ -60,7 +62,7 @@ function Get-ChangedPathsFromPayload {
             if ($null -eq $node) { continue }
 
             if ($node -is [string]) {
-                if ($node -match '^[A-Za-z]:[\\/]' -or $node -like "*\.codex*skills*") {
+                if ($node -match '^[A-Za-z]:[\\/]' -or $node -like "*\.codex*skills*" -or $node -like "*\plugins*") {
                     $paths.Add($node)
                 }
                 continue
@@ -103,39 +105,80 @@ function Test-PathIsUserSkill {
     return $true
 }
 
-function Sync-SkillsToRepo {
+function Test-PathIsUserPlugin {
+    param([string]$Path)
+
+    $normalizedRoot = Normalize-Path $pluginsRoot
+    $normalizedPath = Normalize-Path $Path
+    if ($null -eq $normalizedPath) { return $false }
+    if (-not $normalizedPath.StartsWith($normalizedRoot)) { return $false }
+    return $true
+}
+
+function Sync-DirectoriesToRepo {
+    param(
+        [bool]$SyncSkills,
+        [bool]$SyncPlugins
+    )
+
     if (-not (Test-Path $repoRoot)) {
         Write-Log "repo root missing: $repoRoot"
         return 1
     }
 
-    if (-not (Test-Path $repoSkillRoot)) {
+    if ($SyncSkills -and -not (Test-Path $repoSkillRoot)) {
         New-Item -ItemType Directory -Force $repoSkillRoot | Out-Null
     }
 
-    Get-ChildItem -Path $skillsRoot -Directory -Force |
-        Where-Object { $_.Name -ne ".system" } |
-        ForEach-Object {
-            $destination = Join-Path $repoSkillRoot $_.Name
-            if (Test-Path $destination) {
-                Remove-Item -LiteralPath $destination -Recurse -Force
+    if ($SyncPlugins -and -not (Test-Path $repoPluginRoot)) {
+        New-Item -ItemType Directory -Force $repoPluginRoot | Out-Null
+    }
+
+    if ($SyncSkills) {
+        Get-ChildItem -Path $skillsRoot -Directory -Force |
+            Where-Object { $_.Name -ne ".system" } |
+            ForEach-Object {
+                $destination = Join-Path $repoSkillRoot $_.Name
+                if (Test-Path $destination) {
+                    Remove-Item -LiteralPath $destination -Recurse -Force
+                }
+                Copy-Item -LiteralPath $_.FullName -Destination $destination -Recurse -Force
             }
-            Copy-Item -LiteralPath $_.FullName -Destination $destination -Recurse -Force
-        }
+    }
+
+    if ($SyncPlugins) {
+        Get-ChildItem -Path $pluginsRoot -Directory -Force |
+            ForEach-Object {
+                $destination = Join-Path $repoPluginRoot $_.Name
+                if (Test-Path $destination) {
+                    Remove-Item -LiteralPath $destination -Recurse -Force
+                }
+                Copy-Item -LiteralPath $_.FullName -Destination $destination -Recurse -Force
+            }
+    }
 
     Push-Location $repoRoot
     try {
         $status = git status --short
         if ([string]::IsNullOrWhiteSpace(($status -join "`n"))) {
-            Write-Log "no git changes after skill sync"
+            Write-Log "no git changes after sync"
             return 0
         }
 
-        git add .codex/skill | Out-Null
-        $message = "Sync Codex skills $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+        if ($SyncSkills) {
+            git add .codex/skill | Out-Null
+        }
+        if ($SyncPlugins) {
+            git add .codex/plugin | Out-Null
+        }
+
+        $targets = @()
+        if ($SyncSkills) { $targets += "skills" }
+        if ($SyncPlugins) { $targets += "plugins" }
+        $message = "Sync Codex $($targets -join ' and ') $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
         git -c user.name='koxumeiqi' -c user.email='koxumeiqi@users.noreply.github.com' commit -m $message | Out-Null
         git push | Out-Null
-        Write-Log "synced Codex skills to GitHub"
+        Write-Log "synced Codex $($targets -join ' and ') to GitHub"
         return 0
     } finally {
         Pop-Location
@@ -151,20 +194,23 @@ try {
         exit 0
     }
 
-    $shouldSync = $false
+    $syncSkills = $false
+    $syncPlugins = $false
     foreach ($path in $changedPaths) {
         if (Test-PathIsUserSkill $path) {
-            $shouldSync = $true
-            break
+            $syncSkills = $true
+        }
+        if (Test-PathIsUserPlugin $path) {
+            $syncPlugins = $true
         }
     }
 
-    if (-not $shouldSync) {
-        Write-Log "hook skipped: changed paths outside user skills"
+    if (-not $syncSkills -and -not $syncPlugins) {
+        Write-Log "hook skipped: changed paths outside user skills/plugins"
         exit 0
     }
 
-    exit (Sync-SkillsToRepo)
+    exit (Sync-DirectoriesToRepo -SyncSkills:$syncSkills -SyncPlugins:$syncPlugins)
 } catch {
     Write-Log "sync failed: $($_.Exception.Message)"
     exit 0
