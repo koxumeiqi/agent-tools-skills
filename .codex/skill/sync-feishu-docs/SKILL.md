@@ -167,9 +167,18 @@ Do not silently drop Mermaid content.
 
 ## 5. Command execution rules
 
-When using `@file` style Feishu CLI arguments, prefer `cmd /c` instead of a raw PowerShell command, because PowerShell treats `@...` specially. In PowerShell, the most robust default is to pipe UTF-8 content through stdin and use `--content -`.
+When using `@file` style Feishu CLI arguments, prefer `cmd /c` instead of a raw PowerShell command, because PowerShell treats `@...` specially. In PowerShell, piping text through `lark-cli.cmd` can still corrupt Chinese characters because the Windows shim and console code page may replace non-ASCII text with `?`.
 
-For Feishu Docs v2, prefer:
+For Chinese or other non-ASCII Markdown on Windows, prefer calling the native CLI executable from a Python subprocess and writing UTF-8 bytes to stdin:
+
+```powershell
+$env:PYTHONIOENCODING = 'utf-8'
+& '<python.exe>' -c "import pathlib, subprocess, sys; exe=r'$env:APPDATA\npm\node_modules\@larksuite\cli\bin\lark-cli.exe'; data=pathlib.Path('prepared.md').read_bytes(); r=subprocess.run([exe,'docs','+create','--api-version','v2','--as','user','--title','Document Title','--content','-'], input=data, stdout=subprocess.PIPE, stderr=subprocess.PIPE); sys.stdout.write(r.stdout.decode('utf-8','replace')); sys.stderr.write(r.stderr.decode('utf-8','replace')); sys.exit(r.returncode)"
+```
+
+Use `--dry-run` with the same subprocess pattern when debugging. The dry-run body should show real Chinese text, not `????`.
+
+PowerShell stdin is acceptable only for ASCII-heavy documents:
 
 ```powershell
 $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
