@@ -1,4 +1,4 @@
-interface:
-  display_name: "MRD ²ğ·Ö PRD µ¥Ôª"
-  short_description: "»ùÓÚ Graphiti MCP ½«´óĞÍ MRD ²ğ·ÖÎª±£³ÖÈ«¾ÖÒâÍ¼ºÍÒÀÀµ¹ØÏµµÄ¶à¸ö PRD µ¥Ôª¡£"
-  default_prompt: "Ê¹ÓÃ $mrd-to-prd-units ½«Ö¸¶¨ MRD ÎÄ¼ş²ğ·ÖÎª¶à¸ö¹ØÁª PRD µ¥Ôª¡£"
+ï»¿interface:
+  display_name: "MRD æ‹† PRD å•å…ƒ"
+  short_description: "å°† MRD æ‹†æˆé¢å‘å¼€å‘äº¤ä»˜ã€å¯ç‹¬ç«‹å®ç°å’ŒéªŒæ”¶çš„ PRD å•å…ƒã€‚"
+  default_prompt: "ä½¿ç”¨ $mrd-to-prd-units å°†æŒ‡å®š MRD æ–‡ä»¶æ‹†åˆ†ä¸ºå¼€å‘ PRD å•å…ƒã€‚"

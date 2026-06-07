@@ -27,8 +27,20 @@ def strip_duplicate_h1(text: str) -> str:
     return text if text.endswith("\n") else text + "\n"
 
 
+def keep_h1(text: str) -> str:
+    return text if text.endswith("\n") else text + "\n"
+
+
 def normalize_code_fences(text: str) -> str:
     return text.replace("``` ", "```")
+
+
+def is_table_separator(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped or "|" not in stripped:
+        return False
+    cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+    return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells)
 
 
 def normalize_tables(text: str) -> str:
@@ -38,18 +50,25 @@ def normalize_tables(text: str) -> str:
 
     while i < len(lines):
         line = lines[i]
-        if "|" in line and i + 1 < len(lines):
-            next_line = lines[i + 1]
-            if "|" in next_line and not re.search(r"^\s*\|?[\s:-]+\|", next_line):
-                cells = [c.strip() for c in line.strip().strip("|").split("|")]
-                header = line
-                if not line.strip().startswith("|"):
-                    header = "| " + " | ".join(cells) + " |"
-                sep = "| " + " | ".join(["---"] * len(cells)) + " |"
-                output.append(header)
-                output.append(sep)
+        if "|" in line:
+            table: list[str] = []
+            while i < len(lines) and "|" in lines[i].strip():
+                table.append(lines[i])
                 i += 1
+
+            if len(table) >= 2 and is_table_separator(table[1]):
+                output.extend(table)
                 continue
+
+            cells = [c.strip() for c in table[0].strip().strip("|").split("|")]
+            header = table[0]
+            if not header.strip().startswith("|"):
+                header = "| " + " | ".join(cells) + " |"
+            sep = "| " + " | ".join(["---"] * len(cells)) + " |"
+            output.append(header)
+            output.append(sep)
+            output.extend(table[1:])
+            continue
         output.append(line)
         i += 1
 
@@ -80,7 +99,7 @@ def main() -> None:
     fallback_title = input_path.stem.replace("-", " ").replace("_", " ").strip() or "Feishu Document"
     title = extract_title(source, fallback_title)
 
-    prepared = strip_duplicate_h1(source)
+    prepared = keep_h1(source)
     prepared = normalize_code_fences(prepared)
     prepared = normalize_tables(prepared)
     prepared = convert_mermaid_blocks(prepared)

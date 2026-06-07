@@ -172,6 +172,8 @@ When using `@file` style Feishu CLI arguments, prefer `cmd /c` instead of a raw 
 For Feishu Docs v2, prefer:
 
 ```powershell
+$OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 Get-Content -Raw -Encoding UTF8 '.\prepared.md' |
   & "$env:APPDATA\npm\lark-cli.cmd" docs +create `
     --api-version v2 `
@@ -179,6 +181,8 @@ Get-Content -Raw -Encoding UTF8 '.\prepared.md' |
     --title 'Document Title' `
     --content -
 ```
+
+The explicit UTF-8 output settings are required on Windows. Without them, PowerShell can replace non-ASCII characters with `?` while piping to stdin, producing remote Feishu documents full of question marks even when the local Markdown is valid UTF-8.
 
 Use Drive-native Markdown upload when the user wants a Markdown file in Drive rather than a Feishu Doc:
 
@@ -198,7 +202,47 @@ Run from the directory containing the prepared Markdown file so relative paths w
 
 If `Get-Content` previews Chinese text as mojibake in the terminal, do not assume the file is corrupt. Prefer `Get-Content -Raw -Encoding UTF8` for upload and verify by the created document result.
 
-## 6. Publishing defaults
+## 7. Post-sync self-review
+
+After creating or updating a Feishu document, verify the remote result before reporting success.
+
+### API content review
+
+Fetch the created document and inspect the server-side content:
+
+```powershell
+& "$env:APPDATA\npm\lark-cli.cmd" docs +fetch `
+  --api-version v2 `
+  --as user `
+  --doc '<created-doc-url>'
+```
+
+The remote content must satisfy all of these checks:
+
+- The document title or first visible title contains the intended title, not `Untitled`.
+- Expected Chinese phrases from the source are present.
+- No obvious mojibake markers appear, especially `????`, `æ`, `å`, or `Ñ` sequences in Chinese text.
+- Markdown table separator rows are not present as data cells such as `<p>---</p>`.
+- Mermaid content is preserved in readable fenced-code form or another explicitly chosen fallback.
+
+If any check fails, fix the local preprocessing or upload method and sync again. Common fixes:
+
+- For `????` output, re-upload using explicit UTF-8 PowerShell output settings before piping to `--content -`.
+- For `Untitled`, keep the H1 in the Markdown body and pass `--title`; then verify whether `<title>` was set in `docs +fetch`.
+- For table rows containing `---`, fix preprocessing so legal Markdown separator rows are not duplicated as table body rows.
+
+### Playwright visual review
+
+Use Playwright/browser review after API review when the user asks for visual confirmation or the task involves formatting quality. Open the created Feishu URL and check the visible page for:
+
+- Correct visible title.
+- Normal Chinese rendering, not `????` or mojibake.
+- Tables do not include separator rows as visible data.
+- Mermaid fallback/code blocks remain readable.
+
+If the in-app browser is redirected to Feishu login and cannot inspect the document, state that visual browser review was blocked by login state, then rely on API review. When a logged-in browser profile is available, use it for the visual review.
+
+## 8. Publishing defaults
 
 For a new sync where the user did not specify destination details:
 
@@ -212,7 +256,7 @@ If the user wants a knowledge-base destination:
 - Use `--wiki-space my_library` only for the user's personal library
 - Use `--wiki-node` or a specific wiki destination only when the user provides or confirms it
 
-## 7. Report back after sync
+## 9. Report back after sync
 
 After a successful sync, always return:
 
@@ -220,6 +264,7 @@ After a successful sync, always return:
 - The sync target type used: Drive Markdown or Feishu Doc
 - The resulting Feishu URL
 - Any formatting degradations that occurred, such as Mermaid preserved as code or malformed tables converted to lists
+- The self-review result, including whether API review passed and whether Playwright visual review passed or was blocked by login state
 
 ## Resources
 
